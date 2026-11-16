@@ -1,0 +1,14 @@
+# 架构与异常处理
+
+```text
+可信入站消息 → 命令解析与配置校验 → 成员快照/目标解析
+           → SQLite worker → 规则引擎 → 事务提交 → 回执文本
+```
+
+`index.js` 负责命令解析、编号候选、入口边界和回执；`member-provider.js` 管理可信群成员快照、缓存与并发；`rules.js` 执行经济与关系规则；`progression.js` 管理月积分、每日任务、成就及周事件；`version.js` 保存版本和规则摘要；`store.js`、`store-worker.js` 负责按群串行、SQLite 读写、幂等与 CAS 提交。
+
+只读查询不创建玩家，也不推进离群确认。写操作必须带可信消息 ID；同一消息重放返回第一次的结果，ID 与内容冲突会拒绝。写入时重新校验余额、目标状态、限额和关系，随后在同一事务中保存经济及进度。超时可能意味着结果未知，必须用原消息 ID 查询或人工核对，不能换 ID 重试。
+
+schema 1 升到 2 前会建立一致性备份，未来 schema 和不匹配的规则摘要拒绝加载。版本 1.4.1 使用 `historyResetVersion` 对升级前操作流水做一次性清理；清理只影响 `recent_operations`，不修改玩家资产、关系或 `processed_requests`。玩家退出时移除其个人流水和活跃状态，历史榜条目匿名化。
+
+当前存储实现依赖 `sqlite3` CLI，默认路径为 macOS 的 `/usr/bin/sqlite3`。部署到 Linux 时应显式传 `sqliteBin`，并确认 SQLite 支持 JSON 与窗口函数。运行环境应限制目录权限、备份权限及入站身份来源。
