@@ -92,14 +92,14 @@ function createMarketAdapter({ dataRoot, sqliteBin = '/usr/bin/sqlite3', platfor
 | 项目 | 接入方要做什么 |
 | --- | --- |
 | 机器人名称 `botName` / `agentName` | 填实际机器人名称；平台提及文本需规范化为 `@该名称 #命令`。 |
-| 群聊白名单 `allowedGroupIds` | 填允许使用市场的群；模板将平台群 ID 稳定映射为内部 `…@chatroom`。 |
+| 群聊白名单 `allowedGroupIds` | 填允许使用市场的群；模板将平台群 ID 稳定映射为内部 `…@chatroom`。模块也支持显式 `allGroups=true`，用于宿主已验证全部入站群来源且需要新群自动开启的场景。 |
 | 入站身份与时间 | 从平台提供稳定的 `groupId`、`senderId`、写操作的 `messageId`、`timestampSec`；不能用昵称、当前时间或 LLM 猜测消息 ID。 |
 | 群成员与发送接口 | 实现 `getMembers` 和 `sendText`；成员 ID 必须与入站 `senderId` 同一命名空间。 |
 | 账本位置 `dataRoot` | 指向私有、可写、可备份的持久目录，不使用公开仓库目录保存生产数据。 |
 | 平台与机器人账号命名空间 | `platformKey`、`botAccountId` 应稳定且相互区分，避免群账本或消息 ID 跨平台、跨账号冲突。 |
 | SQLite 程序 | macOS 默认 `/usr/bin/sqlite3`；其他系统通过 `sqliteBin` 指向安装位置。 |
 
-**可用默认值：**月榜 `rankingPeriod='month'`、资产不清零 `noReset=true`、最多 500 名活跃玩家、每群 10 分钟最多 3000 条已接受写操作。`adminUsers` 和 `protectedUsers` 默认为空；需要管理员重置或保护对象时再填写。默认存储队列 256、额外保留退出槽 8、超时 5 秒。若使用内置成员服务，其并发上限 4、等待队列 64、超时 3 秒、缓存 10 秒；注入自己的 `getMembers` 时需自行保证超时与限流。发送限速与投递对账由聊天工具负责，模块配置中的回复预算不会代替发送层限流。完整默认值见[接入与数据契约](docs/integration.md)。
+**可用默认值：**仅在列出的群启用 `allGroups=false`、月榜 `rankingPeriod='month'`、资产不清零 `noReset=true`、最多 500 名活跃玩家、每群 10 分钟最多 3000 条已接受写操作。`adminUsers` 和 `protectedUsers` 默认为空；需要管理员重置或保护对象时再填写。默认存储队列 256、额外保留退出槽 8、超时 5 秒。若使用内置成员服务，其并发上限 4、等待队列 64、超时 3 秒、缓存 10 秒；注入自己的 `getMembers` 时需自行保证超时与限流。发送限速与投递对账由聊天工具负责，模块配置中的回复预算不会代替发送层限流。完整默认值见[接入与数据契约](docs/integration.md)。
 
 ## 快速开始
 

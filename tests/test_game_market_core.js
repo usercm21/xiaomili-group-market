@@ -28,6 +28,9 @@ async function main() {
   assert.strictEqual(parseCandidate({ text: '@小米粒 # 打工', agentName: '小米粒' }), null, '# 后不得插入空格');
   assert.strictEqual(parseCandidate({ text: '@小米粒 #打工 真苦', agentName: '小米粒' }), null);
   assert.throws(() => validateConfig({ rankingPeriod: 'quarter' }), /invalid_ranking_period/);
+  assert.throws(() => validateConfig({ allGroups: 'true' }), /invalid_all_groups/);
+  assert.strictEqual(validateConfig({}).allGroups, false, '默认不自动开放所有群');
+  assert.strictEqual(validateConfig({ allGroups: true }).allGroups, true, '可显式启用所有群');
   assert.strictEqual(validateConfig({}).rankingPeriod, 'month', '默认应为月榜');
   assert.strictEqual(parseCandidate({ text: '@小米粒 #招募', agentName: '小米粒' }).command, 'recruit');
   assert.strictEqual(parseCandidate({ text: '@小米粒 #放生', agentName: '小米粒' }).command, 'release');
@@ -535,6 +538,16 @@ async function main() {
     assert.ok(helpWithoutMembers.reply.includes(`\n\n${heading}\n`), `帮助应分区展示：${heading}`);
   }
   assert.match(helpWithoutMembers.reply, /@小米粒 #招募 #1/u, '帮助应提供编号选择示例');
+  const futureGroupHelp = await helpMarket.handle({
+    text: '@小米粒 #帮助', agentName: '小米粒', chatWxid: 'future@chatroom', senderUsername: 'wxid_a',
+    config: { enabled: true, allGroups: true, groups: [] },
+  });
+  assert.strictEqual(futureGroupHelp.status, 'ok', '所有群模式应自动覆盖未来新增群');
+  const futureGroupDenied = await helpMarket.handle({
+    text: '@小米粒 #帮助', agentName: '小米粒', chatWxid: 'future@chatroom', senderUsername: 'wxid_a',
+    config: { enabled: true, allGroups: false, groups: [] },
+  });
+  assert.strictEqual(futureGroupDenied.code, 'market_disabled', '关闭所有群模式后仍须遵守逐群列表');
   await helpMarket.close();
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'game-market-core-'));

@@ -9,7 +9,7 @@
 | 项目 | 要求 |
 | --- | --- |
 | 机器人名称 | `agentName` 与规范化后的 `@机器人名称 #命令` 完全一致；通过平台元数据确认直接提及。 |
-| 群白名单 | `config.enabled=true`，`config.groups` 包含当前群。模块现要求群 ID 符合 `[A-Za-z0-9_-]{1,96}@chatroom`；其他平台可按 README 模板做稳定映射。群 ID 的映射需跨重启保持不变。 |
+| 群范围 | `config.enabled=true`。默认 `allGroups=false`，此时 `config.groups` 必须包含当前群；要让现有及新加入的所有可信群默认开启，可显式设 `allGroups=true`。模块现要求群 ID 符合 `[A-Za-z0-9_-]{1,96}@chatroom`；其他平台可按 README 模板做稳定映射。群 ID 的映射需跨重启保持不变。 |
 | 入站身份 | `senderUsername` 使用平台稳定用户 ID，不用昵称；成员快照里的 `username` 必须使用相同 ID。ID 长度不超过 128，不能含控制字符。 |
 | 写操作消息 ID | `localId` 使用平台提供的稳定消息 ID，长度不超过 160；不能用时间戳、随机值或重试时新生成的 ID。相同入站消息重投必须保持原 ID。 |
 | 消息时间 | `timestampSec` 是平台消息发生时间，单位秒；写操作只接受相对接收时间过去 5 分钟至未来 1 分钟内的消息。`receivedAtMs` 传服务接收时间，单位毫秒。 |
@@ -25,6 +25,7 @@ README 的[接线模板](../README.md#agent-如何接入)同时提供群 ID 映�
 | 参数 | 默认值 | 何时需要改 |
 | --- | --- | --- |
 | `config.rankingPeriod` | `month`，按北京时间自然月结算 | 需要周榜时设为 `week`。 |
+| `config.allGroups` | `false`，只处理 `config.groups` 中的群 | 宿主确认可信群来源并希望新群自动开启时设为 `true`；不要把未经验证的伪造群消息交给市场。 |
 | `config.noReset` | `true`，结算后保留累计资产与关系 | 需要结算清零时设为 `false`。 |
 | `config.adminUsers`、`config.protectedUsers` | 空数组 | 需要管理员重置权限或保护特定用户时填写稳定用户 ID。 |
 | `config.maxPlayersPerGroup` | 500 | 群规模超出默认容量时调整。 |
