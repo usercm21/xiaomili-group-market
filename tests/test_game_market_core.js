@@ -65,23 +65,30 @@ async function main() {
   let result = execute(state, request('work', 'wxid_a', start), baseConfig, () => 0);
   assert.strictEqual(result.ok, true);
   assert.strictEqual(state.players.get('wxid_a').coins, 51);
-  assert.match(result.reply, /^.+\n\n📌 打工结算\n• 本次获得：41 虚拟币\n• 今日任务奖励：10 虚拟币\n• 当前余额：51 虚拟币\n• 今日次数：1\/5\n• 本月积分：1$/u, '玩法回执应按“趣味描述 + 结果区”排版');
+  assert.match(result.reply, /^.+\n\n📌 打工结算\n• 本次获得：41 虚拟币\n• 今日任务奖励：10 虚拟币\n• 当前余额：51 虚拟币\n• 今日次数：1\/3\n• 本月积分：1$/u, '玩法回执应按“趣味描述 + 结果区”排版');
   result = execute(state, request('work', 'wxid_a', start + 1), baseConfig, () => 0);
   assert.strictEqual(result.code, 'cooldown');
   assert.match(result.reply, /^.+\n\n📌 打工提示\n• 打工冷却中，剩余 1 小时。$/u, '打工冷却应提供趣味描述和精确剩余时间');
-  for (let index = 1; index < 5; index += 1) {
+  for (let index = 1; index < 3; index += 1) {
     result = execute(state, request('work', 'wxid_a', start + index * HOUR), baseConfig, () => 0);
     assert.strictEqual(result.ok, true, `第 ${index + 1} 次打工应成功`);
   }
-  result = execute(state, request('work', 'wxid_a', start + 5 * HOUR), baseConfig, () => 0);
+  result = execute(state, request('work', 'wxid_a', start + 3 * HOUR), baseConfig, () => 0);
   assert.strictEqual(result.code, 'work_daily_limit');
-  assert.match(result.reply, /^.+\n\n📌 打工提示\n• 今日打工次数已用完（5\/5），北京时间明日 00:00 后恢复。$/u, '每日次数提示也应有趣味描述');
+  assert.match(result.reply, /^.+\n\n📌 打工提示\n• 今日已打工 3 次，上限 3 次；北京时间明日 00:00 后恢复。$/u, '每日次数提示也应有趣味描述');
+  const oldCountPlayer = state.players.get('wxid_a');
+  oldCountPlayer.workDailyCount = 4;
+  const oldCoins = oldCountPlayer.coins;
+  result = execute(state, request('work', 'wxid_a', start + 4 * HOUR), baseConfig, () => 0);
+  assert.strictEqual(result.code, 'work_daily_limit');
+  assert.match(result.reply, /今日已打工 4 次，上限 3 次/u, '旧规则下第 4 次的真实次数须保留');
+  assert.strictEqual(oldCountPlayer.coins, oldCoins, '收紧上限不追扣既有收益');
   result = execute(state, request('work', 'wxid_a', start + DAY), baseConfig, () => 0);
   assert.strictEqual(result.ok, true, '北京时间新自然日应重置打工次数');
 
   const beijingMidnightState = emptyState(Date.UTC(2026, 10, 9, 15, 30), 'week', false);
   beijingMidnightState.players.set('wxid_a', initialPlayer('wxid_a', 'A', Date.UTC(2026, 10, 9, 15, 30)));
-  beijingMidnightState.players.get('wxid_a').workDailyCount = 5;
+  beijingMidnightState.players.get('wxid_a').workDailyCount = 3;
   beijingMidnightState.players.get('wxid_a').lastWorkAt = Date.UTC(2026, 10, 9, 15, 30);
   result = execute(beijingMidnightState, request('work', 'wxid_a', Date.UTC(2026, 10, 9, 15, 59)), baseConfig, () => 0);
   assert.strictEqual(result.code, 'work_daily_limit', '北京时间 23:59 仍属于同一自然日');

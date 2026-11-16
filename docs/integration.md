@@ -44,4 +44,4 @@ README 的[接线模板](../README.md#agent-如何接入)同时提供群 ID 映�
 
 `result.consumed=false` 表示文本不是市场指令。其余结果包含 `status`、`code`、`reply`；`status=unknown` 表示存储结果不确定，接入方不得换新消息 ID 盲目重试。`reply` 是待发送文本，不代表已投递。关闭服务时调用 `market.close()`。
 
-账本按群拆分到 `data/game-market/*.sqlite`，含个人 ID、资产、关系、流水和幂等键。运行根、数据库与备份应使用私有权限，不进入公开仓库。升级前应使用 SQLite 一致性备份；未知 schema 或不匹配的规则指纹会拒绝加载。1.4.1 清理旧流水时保留 `processed_requests`，避免旧消息再次记账。
+账本按群拆分到 `data/game-market/*.sqlite`，含个人 ID、资产、关系、流水和幂等键。运行根、数据库与备份应使用私有权限，不进入公开仓库。升级前应使用 SQLite 一致性备份；1.4.2 从精确匹配的旧规则指纹迁移时也会在首次持久化前备份，未知 schema 或不匹配的规则指纹会拒绝加载。1.4.1 清理旧流水时保留 `processed_requests`，避免旧消息再次记账。

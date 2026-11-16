@@ -23,9 +23,9 @@ function sequence(...values) {
 function testVersionAndMigration() {
   const state = emptyState(start);
   assert.strictEqual(state.meta.schemaVersion, 2);
-  assert.strictEqual(state.meta.marketVersion, '1.4.1');
+  assert.strictEqual(state.meta.marketVersion, '1.4.2');
   assert.strictEqual(state.meta.noReset, true);
-  assert.strictEqual(MARKET_VERSION, '1.4.1');
+  assert.strictEqual(MARKET_VERSION, '1.4.2');
   assert.match(RULESET_HASH, /^[a-f0-9]{64}$/);
 
   const legacy = emptyState(start);
@@ -43,12 +43,33 @@ function testVersionAndMigration() {
   assert.strictEqual(player.seasonPoints, 0);
   assert.strictEqual(validateState(legacy), true);
 
+  const oldRules = emptyState(start);
+  oldRules.meta.marketVersion = '1.4.1';
+  oldRules.meta.rulesetVersion = '1.4.0';
+  oldRules.meta.rulesetHash = '9165e2876a7efc90a51248a9dcd07ee4d1f43652d10ac2d8aec727bdc6d90425';
+  const priorPlayer = initialPlayer('old', 'Old', start);
+  priorPlayer.coins = 321;
+  priorPlayer.workDailyCount = 5;
+  oldRules.players.set('old', priorPlayer);
+  upgradeState(oldRules, start + 1000);
+  assert.strictEqual(oldRules.meta.rulesetHash, RULESET_HASH, '仅精确匹配的旧规则可迁移');
+  assert.strictEqual(oldRules.meta.rulesetMigration.fromVersion, '1.4.0');
+  assert.strictEqual(oldRules.meta.rulesetMigration.at, start + 1000);
+  assert.strictEqual(priorPlayer.coins, 321, '迁移保留既有资产');
+  assert.strictEqual(priorPlayer.workDailyCount, 5, '迁移保留旧日内打工次数');
+  upgradeState(oldRules, start + 2000);
+  assert.strictEqual(oldRules.meta.rulesetMigration.at, start + 1000, '重读新规则不得重复登记迁移');
+
   const future = emptyState(start);
   future.meta.schemaVersion = 3;
   assert.throws(() => upgradeState(future, start), /unsupported_market_schema/);
   const mismatched = emptyState(start);
   mismatched.meta.rulesetHash = '0'.repeat(64);
   assert.throws(() => upgradeState(mismatched, start), /unsupported_market_ruleset/);
+  const unknownPrevious = emptyState(start);
+  unknownPrevious.meta.rulesetVersion = '1.4.0';
+  unknownPrevious.meta.rulesetHash = '0'.repeat(64);
+  assert.throws(() => upgradeState(unknownPrevious, start), /unsupported_market_ruleset/);
 }
 
 function testDeterministicEconomy() {

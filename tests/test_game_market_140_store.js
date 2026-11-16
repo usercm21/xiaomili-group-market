@@ -7,6 +7,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { createGameMarket, parseCandidate, validateConfig } = require('../lib/game-market');
 const { createGameMarketStore, safeChatKey } = require('../lib/game-market/store');
+const { RULESET_HASH } = require('../lib/game-market/version');
 
 const sqliteBin = '/usr/bin/sqlite3';
 const start = Date.parse('2026-11-13T06:00:00.000Z');
@@ -120,6 +121,43 @@ async function testSchemaTwoHistoryResetOnce() {
       assert.match(after.reply, /work/);
       assert.doesNotMatch(after.reply, /old/);
       assert.strictEqual(Number(sql(db, 'SELECT COUNT(*) AS count FROM recent_operations;', true)[0].count), 1, '新版本流水应在一次清理后正常保留');
+    } finally { await market.close(); }
+  });
+}
+
+async function testSchemaTwoRulesetMigrationAndBackup() {
+  await withRoot('market-142-ruleset', async (root) => {
+    const market = createGameMarket({ rootDir: root, now: () => start });
+    try {
+      const members = { ok: true, snapshotId: 'old-rules', members: [{ username: 'wxid_a', nickname: 'A' }] };
+      assert.strictEqual((await market.handle(input('@小米粒 #打工', 'seed-work', 'wxid_a', start, { memberSnapshot: members }))).ok, true);
+      const db = dbPath(root);
+      const oldHash = '9165e2876a7efc90a51248a9dcd07ee4d1f43652d10ac2d8aec727bdc6d90425';
+      sql(db, `UPDATE meta SET value_json='"1.4.0"' WHERE key='rulesetVersion'; UPDATE meta SET value_json='"${oldHash}"' WHERE key='rulesetHash'; UPDATE players SET data_json=json_set(data_json,'$.workDailyCount',4) WHERE player_id='wxid_a';`);
+      const historyBefore = Number(sql(db, 'SELECT COUNT(*) AS count FROM recent_operations;', true)[0].count);
+      const projected = await market.handle(input('@小米粒 #市场状态', null, 'wxid_a', start + 100));
+      assert.match(projected.reply, /打工 4\/3/, '只读显示真实旧次数与新上限');
+      assert.strictEqual(JSON.parse(sql(db, "SELECT value_json FROM meta WHERE key='rulesetVersion';", true)[0].value_json), '1.4.0', '只读不得持久迁移');
+
+      const rejected = await market.handle(input('@小米粒 #打工', 'limit-142', 'wxid_a', start + 1000, { memberSnapshot: members }));
+      assert.strictEqual(rejected.code, 'work_daily_limit');
+      assert.match(rejected.reply, /今日已打工 4 次，上限 3 次/);
+      assert.strictEqual(JSON.parse(sql(db, "SELECT value_json FROM meta WHERE key='rulesetVersion';", true)[0].value_json), '1.4.2');
+      assert.strictEqual(JSON.parse(sql(db, "SELECT value_json FROM meta WHERE key='rulesetHash';", true)[0].value_json), RULESET_HASH);
+      assert.strictEqual(JSON.parse(sql(db, "SELECT value_json FROM meta WHERE key='historyResetVersion';", true)[0].value_json), '1.4.1', '规则迁移不得重新清历史');
+      assert.strictEqual(Number(sql(db, 'SELECT COUNT(*) AS count FROM recent_operations;', true)[0].count), historyBefore, '规则迁移保留既有流水');
+      const backups = fs.readdirSync(path.dirname(db)).filter((name) => name.startsWith(`${path.basename(db)}.backup-`) && name.endsWith('.sqlite'));
+      assert.ok(backups.length >= 1, '首次被拒的写操作迁移规则前也须备份');
+      const backup = path.join(path.dirname(db), backups[0]);
+      assert.strictEqual(JSON.parse(sql(backup, "SELECT value_json FROM meta WHERE key='rulesetHash';", true)[0].value_json), oldHash);
+      const state = await market.inspect(chatId, config);
+      assert.strictEqual(state.players.find((player) => player.id === 'wxid_a').workDailyCount, 4);
+      assert.strictEqual(state.meta.rulesetMigration.fromVersion, '1.4.0');
+
+      sql(db, "UPDATE meta SET value_json='\"bad-hash\"' WHERE key='rulesetHash';");
+      assert.strictEqual((await market.handle(input('@小米粒 #市场状态', null, 'wxid_a', start + 2000))).code, 'unsupported_market_ruleset');
+      sql(db, "DELETE FROM meta WHERE key='rulesetHash';");
+      assert.strictEqual((await market.handle(input('@小米粒 #市场状态', null, 'wxid_a', start + 3000))).code, 'unsupported_market_ruleset', '缺少指纹不得继承空状态默认值');
     } finally { await market.close(); }
   });
 }
@@ -242,6 +280,7 @@ async function main() {
   await testCommandsAndDefaultNoReset();
   await testSchemaOneMigrationAndBackup();
   await testSchemaTwoHistoryResetOnce();
+  await testSchemaTwoRulesetMigrationAndBackup();
   await testFutureSchemaReadAndWriteRejected();
   await testConcurrentStoresDoNotLoseCommit();
   await testHistoryIsPrivateBoundedAndDeletedOnExit();
